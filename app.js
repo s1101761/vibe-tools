@@ -81,7 +81,11 @@ function buildItineraryFromInputs(){
   const destinations=[...new Set(splitDestinations(trip.destinations).filter(c=>c!==origin))];
   const days=Math.max(1,Number(trip.days)||1), wantsFood=trip.preferences.includes("在地美食"), wantsCafe=trip.preferences.includes("咖啡甜點");
   const result=[], cityVisitCount={};
-  const addItem=(items,time,name,type,duration=60,cost=0,note="資料待確認",km=0)=>items.push({id:uid(),time,name,type,duration,cost,km,note});
+  const addItem=(items,time,name,type,duration=60,cost=0,note="資料待確認",km=0)=>{
+    // 交通項目若未明確提供里程，依原型的示範車程估算距離，避免總里程永遠為 0。
+    const estimatedKm = type==="交通" && !(Number(km)>0) ? Math.round((Number(duration)||0)*0.75) : (Number(km)||0);
+    items.push({id:uid(),time,name,type,duration,cost,km:estimatedKm,note});
+  };
   const foodCost=(n)=>Math.round(trip.people*n);
   const transferMinutes=(from,to)=>{
     if(from===to)return 0;
@@ -213,7 +217,7 @@ function buildItineraryFromInputs(){
   activeDay=0;
 }
 function tripToForm(){["origin","destinations","startDate","days","people","budgetMode","budget","vehicle","efficiency","fuelPrice","driveLimit","special"].forEach(k=>{if($(k))$(k).value=trip[k]??"";});document.querySelectorAll("#preferences input").forEach(x=>x.checked=(trip.preferences||[]).includes(x.value));}
-function estimate(){let km=0,drive=0,food=0,stay=0,activities=0,parking=0,toll=0;trip.itinerary.forEach(day=>day.forEach(s=>{km+=Number(s.km)||0;drive+=(Number(s.km)||0)/60; if(s.type==="餐飲"||s.type==="咖啡廳")food+=Number(s.cost)||0;else if(s.type==="住宿")stay+=Number(s.cost)||0;else activities+=Number(s.cost)||0;}));const fuel=km/(Number(trip.efficiency)||13)*(Number(trip.fuelPrice)||30);parking=Math.round(km/100)*80;toll=Math.round(km/100)*45;const total=Math.round(fuel+parking+toll+food+stay+activities);const cap=trip.budgetMode==="person"?trip.budget*trip.people:trip.budget;return {km,drive,fuel:Math.round(fuel),parking,toll,food,stay,activities,total,cap,perPerson:total/(trip.people||1)};}
+function estimate(){let km=0,drive=0,food=0,stay=0,activities=0,parking=0,toll=0;trip.itinerary.forEach(day=>day.forEach(s=>{km+=Number(s.km)||0;if(s.type==="交通")drive+=(Number(s.duration)||0)/60; if(s.type==="餐飲"||s.type==="咖啡廳")food+=Number(s.cost)||0;else if(s.type==="住宿")stay+=Number(s.cost)||0;else activities+=Number(s.cost)||0;}));const fuel=km/(Number(trip.efficiency)||13)*(Number(trip.fuelPrice)||30);parking=Math.round(km/100)*80;toll=Math.round(km/100)*45;const total=Math.round(fuel+parking+toll+food+stay+activities);const cap=trip.budgetMode==="person"?trip.budget*trip.people:trip.budget;return {km,drive,fuel:Math.round(fuel),parking,toll,food,stay,activities,total,cap,perPerson:total/(trip.people||1)};}
 function render(){ensureDays();const e=estimate();$("tripTitle").textContent=`${trip.origin||"出發地"}出發・${trip.destinations||"自由探索"}`;$("tripSubtitle").textContent=`${tripDays()} 天 ${Math.max(0,tripDays()-1)} 夜 · ${trip.people} 位旅人 · ${trip.preferences?.length?trip.preferences.join("、"):"依照你的步調旅行"}`;$("totalKm").innerHTML=`${Math.round(e.km).toLocaleString()} <small>km</small>`;$("driveHours").innerHTML=`${e.drive.toFixed(1)} <small>小時</small>`;$("totalCost").textContent=money(e.total);$("perPerson").textContent=`每人約 ${money(e.perPerson)}`;const remain=e.cap-e.total;$("budgetStatus").textContent=remain>=0?"預算內":"超出預算";$("budgetStatus").style.color=remain>=0?"var(--green)":"#c05d45";$("budgetDetail").textContent=remain>=0?`尚有 ${money(remain)}`:`超出 ${money(-remain)}`;$("budgetTotalSmall").textContent=money(e.total);
  const rows=[["燃油費",e.fuel],["停車費（估算）",e.parking],["道路通行費（估算）",e.toll],["住宿費",e.stay],["餐飲費",e.food],["門票與活動",e.activities]];
  $("budgetBreakdown").innerHTML=rows.map(([n,v])=>`<div class="budget-row"><span>${n}</span><b>${money(v)}</b></div>`).join("");const pct=e.cap>0?Math.min(100,e.total/e.cap*100):0;$("budgetProgress").style.width=pct+"%";$("budgetProgress").style.background=e.total>e.cap?"#d9826a":"#6ba78e";$("budgetProgressText").textContent=trip.budgetMode==="person"?`每人預算 ${money(trip.budget)} · 全團上限 ${money(e.cap)}`:`全團預算上限 ${money(e.cap)}`;
